@@ -1,32 +1,35 @@
 const express = require("express");
 // const jwt = require("jsonwebtoken");
 const bodyParser = require("body-parser");
+const cors = require("cors");
 const app = express();
+
+app.use(cors());
 app.use(express.json());
 // require("dotenv").config();
-const port = 5000;
-const secretKey = "your_secret_key";
-if (!secretKey) {
-  console.error("JWT secret key is not set");
-  process.exit(1); // Exit the application if the secret key is not set
-}
+const port = process.env.PORT || 5000;
+// const secretKey = "your_secret_key";
+// if (!secretKey) {
+//   console.error("JWT secret key is not set");
+//   process.exit(1);
+// }
 
 app.use(bodyParser.json());
 const users = []; // Initialize an empty array to store signed-up users
 const users_bp = [];
 
 // Middleware to verify JWT token
-const authenticateToken = (req, res, next) => {
-  const authHeader = req.headers["authorization"];
-  const token = authHeader && authHeader.split(" ")[1];
-  if (token == null) return res.sendStatus(401);
+// const authenticateToken = (req, res, next) => {
+//   const authHeader = req.headers["authorization"];
+//   const token = authHeader && authHeader.split(" ")[1];
+//   if (token == null) return res.sendStatus(401);
 
-  jwt.verify(token, secretKey, (err, user) => {
-    if (err) return res.sendStatus(403);
-    req.user = user;
-    next();
-  });
-};
+//   jwt.verify(token, secretKey, (err, user) => {
+//     if (err) return res.sendStatus(403);
+//     req.user = user;
+//     next();
+//   });
+// };
 
 // Sign-up route
 app.post("/api/signup", (req, res) => {
@@ -76,18 +79,18 @@ app.post("/api/signin", (req, res) => {
   );
 
   if (user) {
-    const accessToken = jwt.sign(
-      {
-        phoneNumber: user.phoneNumber,
-        firstName: user.firstName,
-        lastName: user.lastName,
-      },
-      secretKey
-    );
+    // const accessToken = jwt.sign(
+    //   {
+    //     phoneNumber: user.phoneNumber,
+    //     firstName: user.firstName,
+    //     lastName: user.lastName,
+    //   },
+    //   secretKey
+    // );
     res.status(200).json({
       firstName: user.firstName,
       lastName: user.lastName,
-      accessToken,
+      // accessToken,
       weight: user.weight,
       height: user.height, // Include the weight in the response
     });
@@ -96,78 +99,90 @@ app.post("/api/signin", (req, res) => {
   }
 });
 // Protected route for user data
-app.get("/protected", authenticateToken, (req, res) => {
-  res.json(req.user);
-});
+// app.get("/protected", authenticateToken, (req, res) => {
+//   res.json(req.user);
+// });
 
-app.post("/api/blood-pressure", authenticateToken, async (req, res) => {
-  try {
-    const lastName = req.user.lastName;
+app.post(
+  "/api/blood-pressure",
+  //  authenticateToken,
+  async (req, res) => {
+    try {
+      const lastName = req.user.lastName;
 
-    const firstName = req.user.firstName;
-    const { systolic, diastolic, pulse, date, time } = req.body;
+      const firstName = req.user.firstName;
+      const { systolic, diastolic, pulse, date, time } = req.body;
 
-    const phoneNumber = req.user.phoneNumber;
+      const phoneNumber = req.user.phoneNumber;
 
-    if (!phoneNumber) {
-      return res.status(400).json({ message: "Phone number not provided" });
+      if (!phoneNumber) {
+        return res.status(400).json({ message: "Phone number not provided" });
+      }
+
+      const bloodPressureData = {
+        firstName,
+        lastName,
+        phoneNumber,
+        systolic,
+        diastolic,
+        pulse,
+        date,
+        time,
+      };
+      console.log(bloodPressureData);
+      // Find the existing entry to update (assuming phone number, date, and time uniquely identify a reading)
+      const existingEntry = users_bp.find(
+        (entry) => entry.phoneNumber === phoneNumber
+      );
+
+      if (existingEntry) {
+        // Update existing entry
+        existingEntry.firstName = firstName;
+        existingEntry.lastName = lastName;
+        existingEntry.systolic = systolic;
+        existingEntry.diastolic = diastolic;
+        existingEntry.pulse = pulse;
+
+        console.log("Updated blood pressure reading:", existingEntry);
+        res
+          .status(200)
+          .json({ message: "Blood pressure readings updated successfully" });
+      } else {
+        // No existing entry found, create a new one
+        users_bp.push(bloodPressureData);
+        console.log("New blood pressure reading saved:", bloodPressureData);
+        res
+          .status(201)
+          .json({ message: "Blood pressure readings saved successfully" });
+      }
+    } catch (error) {
+      console.error("Error saving blood pressure readings:", error);
+      res.status(500).json({ message: "Internal server error" });
     }
-
-    const bloodPressureData = {
-      firstName,
-      lastName,
-      phoneNumber,
-      systolic,
-      diastolic,
-      pulse,
-      date,
-      time,
-    };
-    console.log(bloodPressureData);
-    // Find the existing entry to update (assuming phone number, date, and time uniquely identify a reading)
-    const existingEntry = users_bp.find(
-      (entry) => entry.phoneNumber === phoneNumber
-    );
-
-    if (existingEntry) {
-      // Update existing entry
-      existingEntry.firstName = firstName;
-      existingEntry.lastName = lastName;
-      existingEntry.systolic = systolic;
-      existingEntry.diastolic = diastolic;
-      existingEntry.pulse = pulse;
-
-      console.log("Updated blood pressure reading:", existingEntry);
-      res
-        .status(200)
-        .json({ message: "Blood pressure readings updated successfully" });
-    } else {
-      // No existing entry found, create a new one
-      users_bp.push(bloodPressureData);
-      console.log("New blood pressure reading saved:", bloodPressureData);
-      res
-        .status(201)
-        .json({ message: "Blood pressure readings saved successfully" });
-    }
-  } catch (error) {
-    console.error("Error saving blood pressure readings:", error);
-    res.status(500).json({ message: "Internal server error" });
   }
-});
+);
 
 // Endpoint to get all users and their blood pressure data
-app.get("/api/doctor", authenticateToken, (req, res) => {
-  res.json({ users, users_bp });
-});
-
-app.get("/api/users", authenticateToken, (req, res) => {
-  const user = users.find((u) => u.phoneNumber === req.user.phoneNumber); // Assuming req.user is populated by authenticateToken middleware
-  if (user) {
-    res.json({ user });
-  } else {
-    res.status(404).json({ message: "User not found" });
+app.get(
+  "/api/doctor",
+  //  authenticateToken,
+  (req, res) => {
+    res.json({ users, users_bp });
   }
-});
+);
+
+app.get(
+  "/api/users",
+  // authenticateToken,
+  (req, res) => {
+    const user = users.find((u) => u.phoneNumber === req.user.phoneNumber); // Assuming req.user is populated by authenticateToken middleware
+    if (user) {
+      res.json({ user });
+    } else {
+      res.status(404).json({ message: "User not found" });
+    }
+  }
+);
 
 app.post("/api/profile", (req, res) => {
   const {
