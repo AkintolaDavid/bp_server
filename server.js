@@ -171,18 +171,21 @@ app.get(
   }
 );
 
-app.get(
-  "/api/users",
-  // authenticateToken,
-  (req, res) => {
-    const user = users.find((u) => u.phoneNumber === req.user.phoneNumber); // Assuming req.user is populated by authenticateToken middleware
-    if (user) {
-      res.json({ user });
-    } else {
-      res.status(404).json({ message: "User not found" });
-    }
+app.get("/api/users", (req, res) => {
+  console.log("Request query:", req.query);
+  console.log("Request body:", req.body);
+
+  const phoneNumber = req.query.phoneNumber || req.body.phoneNumber;
+  console.log("Looking for user with phone number:", phoneNumber);
+
+  const user = users.find((u) => u.phoneNumber === phoneNumber);
+
+  if (user) {
+    res.json({ user });
+  } else {
+    res.status(404).json({ message: "User not found" });
   }
-);
+});
 
 app.post("/api/profile", (req, res) => {
   const {
